@@ -1,115 +1,81 @@
-# SwerveRobot Library for FTC
+# SwerveRobot Developer Guide
 
-A simple all-in-one swerve drive library for FTC teams.
-
-* Supports **2–4 swerve modules**.
-* Works with **Pinpoint / GoBilda odometry** (plug your odo object in).
-* Inputs in **millimeters + degrees** (targets), robot size + module geometry in **centimeters**.
-* Outputs directly to **drive motors + steer servos**.
+A complete FTC-ready swerve library powered by GoBilda Pinpoint Odometry.
 
 ---
 
-## 🚀 Creating a Robot
+## ⚙️ Setup
+
+### 1. Robot Configuration
+
+* Add drive motors + steer servos to your config.
+* Add Pinpoint Odo as device named **"odo"**.
+
+### 2. Create Robot Instance
 
 ```java
-SwerveRobot bot = SwerveRobot.createRobot(
-    hardwareMap,
-    40, 40,   // robot size in cm
-    new String[]{"driveS","steerS"}, 20, 15, 0.5, 0.3,   // Module S (20cm fwd, 15cm right)
-    new String[]{"driveD","steerD"}, -20, 15, 0.5, 0.3   // Module D
-    // up to 4 modules total
+bot = SwerveRobot.createRobot(hardwareMap, 40, 40,
+    new SwerveRobot.ModuleConfig("driveS","steerS", 20, 15, 0.5, 0.3),
+    new SwerveRobot.ModuleConfig("driveD","steerD", -20, 15, 0.5, 0.3)
 );
 ```
 
-Each module requires:
-
-* `{driveMotorName, steerServoName}` (strings from your config)
-* `rx_cm, ry_cm` position from robot center (cm)
-* `neutral` servo pos (e.g. 0.5 for forward)
-* `range` servo offset (e.g. 0.3 for ±90° steering)
+* Robot size: cm.
+* Module position: cm from robot center (fwd, right).
+* `neutral`: servo position when wheel faces forward.
+* `range`: fraction of servo travel that equals ±90°.
 
 ---
 
-## 🛠️ API Methods
+## 🚀 Public API
 
 ### Autonomous
 
-* `driveTo(x_mm, y_mm, heading_deg)`
-
-  * Drives robot to `(x,y)` in **mm**, then rotates to `heading_deg`.
-  * Uses odo internally to know current pose.
-
-* `isAtTarget()`
-
-  * Returns `true` if the robot is within 5 cm and 2° of target.
-
-* **Waypoint system**:
-
-  * `addWaypoint(x_mm, y_mm, heading_deg)` – add step to queue
-  * `clearWaypoints()` – reset path
-  * `runPath()` – call each loop; drives through waypoints.
-
-    * Returns `true` when finished.
-
-Example:
-
-```java
-bot.addWaypoint(1000, 0, 0);
-bot.addWaypoint(1000, 2000, 90);
-bot.addWaypoint(0, 2000, 180);
-
-while (opModeIsActive()) {
-    if (bot.runPath()) break; // done
-}
-```
+* `driveTo(x_mm, y_mm, heading_deg)` → drive to coordinates in mm + heading in deg.
+* `isAtTarget()` → returns true if within 5 cm + 2°.
+* `addWaypoint(x_mm, y_mm, heading_deg)` → queue movement.
+* `runPath()` → call in loop; returns true when path finished.
+* `clearWaypoints()` → reset path.
 
 ### TeleOp
 
-* `driveWithJoystick(forward, strafe, turn)`
+* `driveWithJoystick(forward, strafe, turn, fieldOriented)`
 
-  * Inputs are `-1..+1` (from gamepad joysticks).
-  * Forward = left stick y, Strafe = left stick x, Turn = right stick x.
-  * Internally maps to max linear speed (`1.5 m/s`) and max turn (`180°/s`).
+  * Inputs: -1..+1 from gamepad.
+  * `fieldOriented` → true = controls relative to field.
 
-Example:
+### Telemetry
 
-```java
-double fwd = -gamepad1.left_stick_y;
-double str = gamepad1.left_stick_x;
-double turn = gamepad1.right_stick_x;
-bot.driveWithJoystick(fwd, str, turn);
-```
+* `reportPose(telemetry)` → prints X, Y, Heading, Target status.
 
----
+### Tuning
 
-## ⚙️ Tuning Parameters (inside SwerveRobot)
-
-* `kP_lin` – how aggressively robot drives toward target (m/s per m error).
-* `kP_ang` – how aggressively robot turns to heading (deg/s per deg error).
-* `maxLin_mps` – clamp on max linear speed (default 1.5 m/s).
-* `maxTurn_degps` – clamp on max turn speed (default 180°/s).
+* `setLinearPID(kP)` → drive aggressiveness.
+* `setAngularPID(kP)` → turn aggressiveness.
+* `setMaxSpeeds(lin_mps, turn_degps)` → clamp robot speed.
+* `setMaxAcceleration(linAccel, turnAccel)` → ramping rate.
+* `setCWPositive(flag)` → choose CW-positive or CCW-positive rotation.
 
 ---
 
-## ✅ Features
+## 🛠️ Internal Details
 
-* Fully autonomous + teleop ready.
-* Easy to configure: robot size in cm, targets in mm.
-* Works with **2, 3, or 4 modules**.
-* Servo steering calibrated with `neutral` + `range`.
-* Simple waypoint system for Auto.
+* **Ramping**: Limits acceleration. `dt` is clamped to 0.1s to prevent jumps.
+* **Normalization**: If any wheel > max speed, all scale proportionally.
+* **Servo mapping**: `neutral ± range` = ±90°. Teams must calibrate.
+* **Odo units**: Pinpoint returns X/Y in mm, Heading in radians. Converted internally to m + deg.
+* **Rotation**: Default `cwPositive = true` (CW = positive). Teams can flip if needed.
 
 ---
 
-## 📌 Example Autonomous
+## 📘 Example Autonomous
 
 ```java
 @Override
 public void init() {
-    bot = SwerveRobot.createRobot(
-        hardwareMap, 40, 40,
-        new String[]{"driveS","steerS"}, 20, 15, 0.5, 0.3,
-        new String[]{"driveD","steerD"}, -20, 15, 0.5, 0.3
+    bot = SwerveRobot.createRobot(hardwareMap, 40, 40,
+        new SwerveRobot.ModuleConfig("driveS","steerS", 20, 15, 0.5, 0.3),
+        new SwerveRobot.ModuleConfig("driveD","steerD", -20, 15, 0.5, 0.3)
     );
     bot.addWaypoint(1000, 0, 0);
     bot.addWaypoint(1000, 1000, 90);
@@ -117,15 +83,15 @@ public void init() {
 
 @Override
 public void loop() {
-    if (bot.runPath()) {
-        telemetry.addLine("Path finished!");
-    }
+    if (bot.runPath()) telemetry.addLine("Path finished!");
+    bot.reportPose(telemetry);
+    telemetry.update();
 }
 ```
 
 ---
 
-## 📌 Example TeleOp
+## 📘 Example TeleOp
 
 ```java
 @Override
@@ -133,6 +99,48 @@ public void loop() {
     double fwd = -gamepad1.left_stick_y;
     double str = gamepad1.left_stick_x;
     double turn = gamepad1.right_stick_x;
-    bot.driveWithJoystick(fwd, str, turn);
+    bot.driveWithJoystick(fwd, str, turn, true);
+
+    bot.reportPose(telemetry);
+    telemetry.update();
 }
 ```
+
+---
+
+## 📗 JavaDoc Basics
+
+* Add `/** ... */` comments above **classes** and **methods**.
+* Use `@param` and `@return` for parameters/outputs.
+* Example:
+
+```java
+/**
+ * Drive to target coordinates.
+ * @param x_mm target X in millimeters
+ * @param y_mm target Y in millimeters
+ * @param heading_deg target heading in degrees
+ */
+public void driveTo(double x_mm, double y_mm, double heading_deg) { ... }
+```
+
+### Generate Docs
+
+In Android Studio or command line:
+
+```bash
+javadoc -d docs src/main/java/org/firstinspires/ftc/teamcode/swerve/SwerveRobot.java
+```
+
+* Output: HTML docs inside `docs/`.
+* Open `index.html` in browser → full documentation.
+
+---
+
+## ✅ Best Practices
+
+* Calibrate servos carefully.
+* Tune `kP_lin` and `kP_ang` on field.
+* Always call `reportPose()` during testing.
+* Flip `cwPositive` if rotations are reversed.
+* Clamp speeds conservatively to avoid wheel slip.
